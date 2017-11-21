@@ -146,19 +146,20 @@ SuccessiveElimination, UCB1]
 algorithm_names = ["ThompsonSampling", "UniformExploration", "EpsilonGreedy",
 "SuccessiveElimination", "UCB1"]
 
-if False:
-    print("Normal bandit algorithms")
-    for reward_generator in ["lower", "random"]:
-        print("Reward generator: {}".format(reward_generator))
-        for i in range(len(algorithms)):
-            print("Algorithm: {}".format(algorithm_names[i]))
-            cumulative_regrets = run_experiment(algorithms[i], K, Ts,
-            reward_generator=reward_generator)
-            print("Cumulative regrets: {}".format(cumulative_regrets))
-            plot(np.log(Ts), np.log(cumulative_regrets),
-            figname=algorithm_names[i] + "-" + reward_generator,
-            xlabel="Log T", ylabel="Log cumulative regret",
-            title=algorithm_names[i] + " on adversarial " + reward_generator)
+print("Standard bandits")
+for reward_generator in ["lower", "random"]:
+    all_cumulative_regrets = []
+    print("Reward generator: {}".format(reward_generator))
+    for i in range(len(algorithms)):
+        print("Algorithm: {}".format(algorithm_names[i]))
+        all_cumulative_regrets.append(run_experiment(algorithms[i], K, Ts,
+        reward_generator=reward_generator))
+        #print("Cumulative regrets: {}".format(cumulative_regrets))
+
+    plot_many(np.log(Ts), all_cumulative_regrets, labels=algorithm_names,
+    figname="standard-all" + "-" + reward_generator,
+    xlabel="Log T", ylabel="Log cumulative regret",
+    title="Standard bandits on " + reward_generator)
 
 # Task 2: 
 print("Adversarial bandits")
