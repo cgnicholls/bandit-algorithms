@@ -1,0 +1,124 @@
+\documentclass[10pt]{article}
+
+\usepackage{amsmath, amsfonts}
+\usepackage{graphicx}
+
+\newcommand{\EE}{\mathbb{E}}
+\newcommand{\bigoh}{\mathcal{O}}
+
+\DeclareMathOperator{\Beta}{Beta}
+\DeclareMathOperator{\argmax}{argmax}
+
+\title{AIMS Machine Learning Course 2017 \\ \emph{Solutions to Practical 3}}
+\author{Chris Nicholls}
+\begin{document}
+
+\maketitle
+
+\section{Overview of algorithms}
+
+\section{Task 1}
+
+
+
+We model the reward distribution of each arm $a$ as a Bernoulli distribution
+with mean $\mu_a$. We considered two methods of selecting $\mu_a$. Firstly, we
+consider sampling $\mu_a$ for each arm uniformly in $[0,1]$. Secondly, we
+consider the lower bound construction as in the lectures. With $K$ arms, we
+choose uniformly at random among the $K$ setups $I_i$, where
+\begin{align*}
+    \mu_j =
+    \begin{cases}
+        \frac{1}{2} + \epsilon, & \textrm{if} \hspace{0.2cm} j = i \\
+        \frac{1}{2}, & \textrm{if} \hspace{0.2cm} j \not= i.
+    \end{cases}
+\end{align*}
+
+Thus in the lower bound setup, we randomly choose one of the arms to have reward
+$1/2 + \epsilon$, and all other arms have reward $1/2$. It is shown in lectures
+that all bandit algorithms have expected cumulative regret $\Omega(\sqrt{K T})$
+for this setup. In the below, I set $\epsilon = 0.1$. Feasibly I could have set
+this smaller, making it harder for the algorithms, but I didn't have enough
+computing power to take $T$ large enough for this to be visible.
+
+I implemented Uniform exploration, epsilon-greedy, successive elimination and
+UCB1, and tried each algorithm out on both bandit setups. The following are the
+results. As suggested in Task 1, I fixed $K = 10$ arms and focused on the
+dependence on $T$. Each is a plot of $\log R(T)$ against $\log T$, where $R(T)$
+denotes the expected cumulative regret. To approximate $R(T)$, I ran each
+experiment 20 times and averaged the results.
+
+The algorithms have the following bounds on expected cumulative regrets:
+\begin{itemize}
+    \item Uniform exploration: with $N$ chosen as $\bigoh( (T/K)^{2/3} (\log
+    T)^{1/3} )$ we have $\EE(R(T)) \le \bigoh(T^{2/3} (K \log T)^{1/3})$.
+    \item Epsilon-greedy: with exploration probabilities $\epsilon_t = t^{-1/3}
+    (K \log t)^{1/3}$ achieves regret bound $\EE(R(T)) \le \bigoh( t^{2/3} (K
+    \log t)^{1/3} )$.
+    \item Successive elimination: achieves regret bound $\EE(R(t)) =
+    \bigoh(\sqrt{K t \log T})$ for all rounds $t \le T$.
+    \item UCB1: achieves regret bound $\EE(R(t)) = \bigoh(\sqrt{K t \log T})$
+    for all rounds $t \le T$.
+\end{itemize}
+
+Thus $\log \EE( R(T) ) \le \frac{2}{3} \log T + \bigoh(\log (K \log T))$ for
+uniform exploration and epsilon-greedy. For successive elimination and UCB1, the
+slope of $\log \EE( R(T))$ against $\log T$ is bounded by $\frac{1}{2}$. We
+analyse this in the following graphs.
+
+We expect that for the uniformly random chosen means, the slopes are at most
+$2/3, 2/3, 1/2, 1/2$, respectively. For the lower bound means, we are expecting
+that the slopes should all be at least $1/2$.
+
+\begin{figure}[!ht]
+    \center
+    \begin{tabular}{cc}
+        \includegraphics[width=7cm]{"plots/uniform-random"} &
+        \includegraphics[width=7cm]{"plots/epsilongreedy-random"} \\
+        \includegraphics[width=7cm]{"plots/successiveelimination-random"} &
+        \includegraphics[width=7cm]{"plots/ucb1-random"} \\
+        \includegraphics[width=7cm]{"plots/thompson-random"} & 
+    \end{tabular}
+    \caption{Uniformly random chosen means}
+    \label{figure-random}
+\end{figure}
+
+\begin{figure}[!ht]
+    \center
+    \begin{tabular}{cc}
+        \includegraphics[width=7cm]{"plots/uniform-lower"} &
+        \includegraphics[width=7cm]{"plots/epsilongreedy-lower"} \\
+        \includegraphics[width=7cm]{"plots/successiveelimination-lower"} &
+        \includegraphics[width=7cm]{"plots/ucb1-lower"} \\
+        \includegraphics[width=7cm]{"plots/thompson-lower"} & 
+    \end{tabular}
+    \caption{Means from lower bound construction}
+    \label{figure-lower}
+\end{figure}
+
+\section{Task 2}
+
+\subsection{Thompson sampling}
+I implemented Thompson sampling using a beta distribution. I used the prior
+$\Beta(1,1)$ and then updated each arm when I received a reward for it. After
+observing $\alpha$ 1s and $n - \alpha$ 0s from arm $a$, the posterior is
+$\Beta(\alpha + 1, n - \alpha + 1)$.
+
+Given the posterior for each arm $a$, we sample a mean $\tilde{\mu}_a$, and then pick
+the arm $\tilde{a} = \argmax_a \tilde{\mu}_a$.
+
+The results using Thompson sampling are displayed in Figure~\ref{figure-random}
+and Figure~\ref{figure-lower}
+
+\subsection{Adversarial bandits}
+
+For the adversariabl bandit setting, I investigated the following scenario,
+suggested in the problem description. I sampled two separate mean vectors
+$\mu^1, \mu^2$ uniformly in $[0,1]^K$. I also chose a transition probability $p$
+and then give the arms the Bernoulii distribution with mean vector $\mu$, where
+$\mu$ is chosen as follows.  Initially, $\mu = \mu^1$. On each round, with
+probability $p$ the mean vector $\mu$ is selected as the other mean vector.
+
+Each run of the algorithm 
+
+\end{document}
