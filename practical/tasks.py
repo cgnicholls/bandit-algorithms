@@ -21,9 +21,11 @@
 # confidence of an arm is less than the lower confidence of some (every other?)
 # arm, then remove this arm from consideration.
 
+import pickle
 import numpy as np
 from bandit_algorithms import UniformExploration, EpsilonGreedy, UCB1, SuccessiveElimination, ThompsonSampling, Exp4
-from plot_functions import plot, plot_many
+from plot_functions import plot, plot_many, plot_from_pickle
+from time import time
 
 def sample_bernoulli(p):
     if np.random.rand() < p:
@@ -155,8 +157,12 @@ def run_adversarial_experiment(bandit_class, K, Ts, transition_probability=0.1, 
 if __name__ == "__main__":
     K = 10
     base = 1.2
-    num_Ts = 40
+    num_Ts = 10
     Ts = [int(20 * base**i) for i in range(num_Ts)]
+    print("Ts: {}".format(Ts))
+
+    run_standard = True
+    run_adversarial = False
 
     algorithms = [SuccessiveElimination, UCB1, ThompsonSampling,
     UniformExploration, EpsilonGreedy, Exp4]
@@ -169,9 +175,10 @@ if __name__ == "__main__":
     #algorithms = [EpsilonGreedy]
     #algorithm_names = ["EpsilonGreedy"]
 
-    if True:
+    if run_standard:
         print("Standard bandits")
         for reward_generator in ["lower", "random"]:
+            start_time = time()
             all_cumulative_regrets = []
             print("Reward generator: {}".format(reward_generator))
             for i in range(len(algorithms)):
@@ -180,15 +187,27 @@ if __name__ == "__main__":
                 reward_generator=reward_generator))
                 #print("Cumulative regrets: {}".format(cumulative_regrets))
 
-            plot_many(np.log(Ts), np.log(all_cumulative_regrets), labels=algorithm_names,
-            figname="standard-all" + "-" + reward_generator,
-            xlabel="Log T", ylabel="Log cumulative regret",
-            title="Standard bandits on " + reward_generator)
+            # Save to file.
+            figname = "standard-all" + "-" + reward_generator + "-numTs-" + str(num_Ts)
+            pickle_name = figname + ".pickle"
+            pickle_out = open(pickle_name,"wb")
+            result_dict = {"xs": np.log(Ts),
+                           "ys": np.log(all_cumulative_regrets),
+                           "labels": algorithm_names,
+                           "xlabel": "Log T",
+                           "ylabel": "Log cumulative regret",
+                           "title": "Standard bandits on " + reward_generator}
+            pickle.dump(result_dict, pickle_out)
+            pickle_out.close()
+
+            plot_from_pickle(pickle_name, figname)
+            print("Time taken to test all algorithms: {}".format(time() - start_time))
 
     # Task 2: 
-    if False:
+    if run_adversarial:
         print("Adversarial bandits")
         for reward_generator in ["lower", "random"]:
+            start_time = time()
             all_cumulative_regrets = []
             print("Reward generator: {}".format(reward_generator))
             for i in range(len(algorithms)):
@@ -197,7 +216,18 @@ if __name__ == "__main__":
                 reward_generator=reward_generator))
                 #print("Cumulative regrets: {}".format(cumulative_regrets))
 
-            plot_many(np.log(Ts), np.log(all_cumulative_regrets), labels=algorithm_names,
-            figname="adversarial-all" + "-" + reward_generator,
-            xlabel="Log T", ylabel="Log cumulative regret",
-            title="Adversarial on " + reward_generator)
+            # Save to file.
+            figname = "adversarial-all" + "-" + reward_generator + "-numTs-" + str(num_Ts)
+            pickle_name = figname + ".pickle"
+            pickle_out = open(pickle_name,"wb")
+            result_dict = {"xs": np.log(Ts),
+                           "ys": np.log(all_cumulative_regrets),
+                           "labels": algorithm_names,
+                           "xlabel": "Log T",
+                           "ylabel": "Log cumulative regret",
+                           "title": "Adversarial bandits on " + reward_generator}
+            pickle.dump(result_dict, pickle_out)
+            pickle_out.close()
+
+            plot_from_pickle(pickle_name, figname)
+            print("Time taken to test all algorithms: {}".format(time() - start_time))
