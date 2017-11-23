@@ -1,4 +1,10 @@
 import numpy as np
+
+# Given the current mean, a new element to add to the list, and the size of the
+# current list, computes the mean of the new list.
+def update_mean(current_mean, new_x, n):
+    return (current_mean * float(n) + new_x) / float(n+1)
+
 # A bandit algorithm takes in a number of arms, and every time it is called has
 # to choose which arm to pull.
 class BanditAlgorithm:
@@ -62,7 +68,13 @@ class EpsilonGreedy(BanditAlgorithm):
         # Update mean rewards
         if not previous_reward is None:
             self.rewards[previous_action].append(float(previous_reward))
-            self.mean_rewards = {k : np.mean(v) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
+            # The only reward to be updated is the mean reward for the previous
+            # action
+            # New fast way of doing it: only update the mean reward for the
+            # previous reward, and update it in constant time.
+            self.mean_rewards[previous_action] = update_mean(self.mean_rewards[previous_action], previous_reward, len(self.rewards[previous_action]))
+            # Old way of doing it:
+            #self.mean_rewards[previous_action] = np.mean(self.rewards[previous_action])
         
         if np.random.rand() < self.epsilon:
             action = np.random.choice(self.K)
@@ -90,8 +102,14 @@ class UCB1(BanditAlgorithm):
         # Compute mean rewards and confidence intervals
         if not previous_reward is None:
             self.rewards[previous_action].append(float(previous_reward))
-            self.mean_rewards = {k : np.mean(v) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
-            self.confidences = {k : self.compute_rt(self.T, len(v)) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
+            # Only have to update the mean reward and confidence of the
+            # previous_action.
+            self.mean_rewards[previous_action] = update_mean(self.mean_rewards[previous_action], previous_reward, len(self.rewards[previous_action]))
+            self.confidences[previous_action] = self.compute_rt(self.T, len(self.rewards[previous_action]))
+            
+            # Old way:
+            #self.mean_rewards = {k : np.mean(v) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
+            #self.confidences = {k : self.compute_rt(self.T, len(v)) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
 
         # Play each arm at least once, then play the arm with highest upper
         # confidence.
@@ -103,7 +121,6 @@ class UCB1(BanditAlgorithm):
 
         self.t += 1
         return action
-
 
 class SuccessiveElimination(BanditAlgorithm):
     def __init__(self, K, T):
@@ -128,8 +145,13 @@ class SuccessiveElimination(BanditAlgorithm):
         # Compute mean rewards and confidence intervals
         if not previous_reward is None:
             self.rewards[previous_action].append(float(previous_reward))
-            self.mean_rewards = {k : np.mean(v) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
-            self.confidences = {k : self.compute_rt(self.T, len(v)) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
+            # Only have to update mean rewards and confidences of previous_action.
+            self.mean_rewards[previous_action] = update_mean(self.mean_rewards[previous_action], previous_reward, len(self.rewards[previous_action]))
+            self.confidences[previous_action] = self.compute_rt(self.T, len(self.rewards[previous_action]))
+
+            # Old way:
+            #self.mean_rewards = {k : np.mean(v) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
+            #self.confidences = {k : self.compute_rt(self.T, len(v)) if len(v) > 0 else 0.0 for k,v in self.rewards.iteritems()}
 
         if len(self.arms_to_play_this_round) == 0:
             # If we played all the active arms, then we compute upper and lower
@@ -174,3 +196,53 @@ class ThompsonSampling(BanditAlgorithm):
         # Pick the action with largest mean in the sample
         action = max(range(self.K), key=lambda x: mu_sample[x])
         return action
+
+# Exp4 is designed to have good regret bounds in the adversarial bandit
+# situation. We implement this with cost notation, where cost = 1 - reward. The
+# interface is as for rewards though, since we make the adjustment inside 'play'.
+class Exp4(BanditAlgorithm):
+    def __init__(self, K, T, epsilon=0.3, gamma=0.3):
+        self.K = K
+        self.T = T
+        self.t = 0
+        self.weights = np.array([1 for i in range(self.K)])
+        self.gamma = 1 / (4 * self.T) # gamma should be in [0, 1/2T)
+        U = self.K / (1 - self.gamma)
+        self.epsilon = np.sqrt(np.log(self.K) / (3*U)) # epsilon should equal sqrt(log K / (3*U))
+
+        # Initialise fake costs to 0.
+        self.fake_costs = np.array([0.0 for i in range(self.K)])
+        self.picked_expert = None
+        self.prob_dist = np.array([1.0 / self.K for i in range(self.K)])
+
+    def update_weights(self, weights, fake_costs, epsilon):
+        return weights * (1.0 - epsilon)**fake_costs
+
+    def play(self, previous_reward, previous_action):
+        # previous_cost is the cost ct(at) for the previous action
+        # (previous_action).
+        # If this is the first action, then just choose randomly.
+        if previous_reward is None:
+            self.picked_expert = np.random.choice(self.K)
+            return self.picked_expert
+
+        previous_cost = 1.0 - previous_reward
+
+        # Define fake costs
+        self.fake_costs = np.zeros(self.K)
+        if (not self.picked_expert is None) and (self.picked_expert == previous_action):
+            self.fake_costs[self.picked_expert] = float(previous_cost) / self.prob_dist[self.picked_expert]
+
+        # Then update weights
+        self.weights = self.update_weights(self.weights, self.fake_costs, self.epsilon)
+
+        # Then compute prob dist.
+        self.prob_dist = self.weights / np.sum(self.weights)
+
+        # Draw an expert from the prob dist.
+        self.picked_expert = np.random.choice(self.K, p=self.prob_dist)
+        # With probability gamma, we choose randomly
+        if np.random.rand() < self.gamma:
+            return np.random.choice(self.K)
+        else:
+            return self.picked_expert

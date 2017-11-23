@@ -1,1 +1,4 @@
 pdflatex aims-ml-practicalwriteup
+bibtex aims-ml-practicalwriteup
+pdflatex aims-ml-practicalwriteup
+pdflatex aims-ml-practicalwriteup

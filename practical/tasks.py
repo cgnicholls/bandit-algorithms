@@ -22,7 +22,7 @@
 # arm, then remove this arm from consideration.
 
 import numpy as np
-from bandit_algorithms import UniformExploration, EpsilonGreedy, UCB1, SuccessiveElimination, ThompsonSampling
+from bandit_algorithms import UniformExploration, EpsilonGreedy, UCB1, SuccessiveElimination, ThompsonSampling, Exp4
 from plot_functions import plot, plot_many
 
 def sample_bernoulli(p):
@@ -30,6 +30,9 @@ def sample_bernoulli(p):
         return 1
     else:
         return 0
+
+def sample_many_bernoulli(p):
+    return (np.random.rand(len(p)) < p).astype('float32')
 
 # Choose K mean rewards
 def sample_mean_rewards(K):
@@ -43,14 +46,18 @@ def lower_bound_mean_rewards(K, eps=1e-1):
     return means
 
 # Computes the regret of the reward sequence, given mean rewards of each arm.
-def compute_regret(rewards, mean_rewards):
-    T = len(rewards)
-    return T * max(mean_rewards) - np.sum(rewards)
+def compute_regret(actions, mean_rewards):
+    T = len(actions)
+    algo_reward = 0.0
+    for a_t in actions:
+        algo_reward += mean_rewards[a_t]
+    return T * max(mean_rewards) - algo_reward
 
 # Computes the regret of the reward sequence, given the rewards of each arm in
 # hindsight. That is, the best action (in expectation) we could have received in
 # hindsight minus the reward we actually received.
-def compute_regret_in_hindsight(rewards, hindsight_reward):
+def compute_regret_in_hindsight(rewards, reward_table):
+    hindsight_reward = np.sum(reward_table, axis=1)
     return max(hindsight_reward) - np.sum(rewards)
 
 # Takes a bandit algorithm, mean rewards and a maximum number of steps, and
@@ -58,16 +65,15 @@ def compute_regret_in_hindsight(rewards, hindsight_reward):
 def multi_armed_bandit(bandit_algorithm, mean_rewards, max_steps):
     # Use the Bernoulli distribution with means given by mean_rewards.
     rewards = []
-    action_counts = {i: 0 for i in range(len(mean_rewards))}
+    actions = []
     reward = None
     action = None
     for t in range(max_steps):
         action = bandit_algorithm.play(reward, action)
         reward = sample_bernoulli(mean_rewards[action])
         rewards.append(reward)
-        action_counts[action] += 1
-    return rewards, action_counts
-
+        actions.append(action)
+    return rewards, actions
 
 def run_experiment(bandit_class, K, Ts, num_repeats=40, reward_generator="random"):
     cumulative_regrets = []
@@ -79,8 +85,8 @@ def run_experiment(bandit_class, K, Ts, num_repeats=40, reward_generator="random
                 mean_rewards = sample_mean_rewards(K)
             else:
                 mean_rewards = lower_bound_mean_rewards(K)
-            rewards, action_counts = multi_armed_bandit(bandit_algorithm, mean_rewards, T)
-            regrets.append(compute_regret(rewards, mean_rewards))
+            rewards, actions = multi_armed_bandit(bandit_algorithm, mean_rewards, T)
+            regrets.append(compute_regret(actions, mean_rewards))
         cumulative_regrets.append(np.mean(regrets))
         print("T: {}, cumulative regret: {}".format(T, cumulative_regrets[-1]))
     return cumulative_regrets
@@ -99,23 +105,32 @@ def adversarial_bandit(bandit_algorithm, mean_rewards_1, mean_rewards_2,
     # Use the Bernoulli distribution with means given by mean_rewards.
     mus = [mean_rewards_1, mean_rewards_2]
     mu_index = 0
-    rewards = []
-    action_counts = {i: 0 for i in range(len(mean_rewards_1))}
-    reward = None
-    action = None
-    hindsight_reward = np.zeros(len(mean_rewards_1))
-    for t in range(max_steps):
-        action = bandit_algorithm.play(reward, action)
-        reward = sample_bernoulli(mus[mu_index][action])
-        rewards.append(reward)
-        action_counts[action] += 1
 
-        hindsight_reward += mus[mu_index]
+    # Set up rewards and actions
+    rewards = []
+    K = len(mean_rewards_1)
+    reward_table = np.zeros((K, max_steps))
+    reward = None
+    actions = []
+    action = None
+
+    # Do the loop
+    for t in range(max_steps):
+        # Get the action from the bandit algorithm
+        action = bandit_algorithm.play(reward, action)
+        actions.append(action)
+
+        # Update the reward table (we could do this right at the start, since
+        # it's an oblivious adversary).
+        reward_table[:,t] = sample_many_bernoulli(mus[mu_index])
+        reward = rewards_table[action,t]
+        rewards.append(reward)
 
         # Transition
         if np.random.rand() < transition_probability:
             mu_index = 1-mu_index
-    return rewards, action_counts, hindsight_reward
+            
+    return reward_table, rewards, actions
 
 def run_adversarial_experiment(bandit_class, K, Ts, transition_probability=0.1, num_repeats=40, reward_generator="random"):
     cumulative_regrets = []
@@ -129,50 +144,60 @@ def run_adversarial_experiment(bandit_class, K, Ts, transition_probability=0.1, 
             else:
                 mean_rewards_1 = lower_bound_mean_rewards(K)
                 mean_rewards_2 = lower_bound_mean_rewards(K)
-            rewards, action_counts, hindsight_reward = adversarial_bandit(bandit_algorithm,
+            reward_table, rewards, actions = adversarial_bandit(bandit_algorithm,
             mean_rewards_1, mean_rewards_2, transition_probability, T)
 
-            regrets.append(compute_regret_in_hindsight(rewards, hindsight_reward))
+            regrets.append(compute_regret_in_hindsight(rewards, reward_table))
         cumulative_regrets.append(np.mean(regrets))
         print("T: {}, cumulative regret: {}".format(T, cumulative_regrets[-1]))
     return cumulative_regrets
 
-K = 10
-base = 1.2
-Ts = [int(20 * base**i) for i in range(30)]
+if __name__ == "__main__":
+    K = 10
+    base = 1.2
+    num_Ts = 40
+    Ts = [int(20 * base**i) for i in range(num_Ts)]
 
-algorithms = [ThompsonSampling, UniformExploration, EpsilonGreedy,
-SuccessiveElimination, UCB1]
-algorithm_names = ["ThompsonSampling", "UniformExploration", "EpsilonGreedy",
-"SuccessiveElimination", "UCB1"]
+    algorithms = [SuccessiveElimination, UCB1, ThompsonSampling,
+    UniformExploration, EpsilonGreedy, Exp4]
+    algorithm_names = ["SuccessiveElimination", "UCB1", "ThompsonSampling",
+    "UniformExploration", "EpsilonGreedy", "Exp4"]
 
-print("Standard bandits")
-for reward_generator in ["lower", "random"]:
-    all_cumulative_regrets = []
-    print("Reward generator: {}".format(reward_generator))
-    for i in range(len(algorithms)):
-        print("Algorithm: {}".format(algorithm_names[i]))
-        all_cumulative_regrets.append(run_experiment(algorithms[i], K, Ts,
-        reward_generator=reward_generator))
-        #print("Cumulative regrets: {}".format(cumulative_regrets))
+    #algorithms = [Exp4]
+    #algorithm_names = ["Exp4"]
 
-    plot_many(np.log(Ts), all_cumulative_regrets, labels=algorithm_names,
-    figname="standard-all" + "-" + reward_generator,
-    xlabel="Log T", ylabel="Log cumulative regret",
-    title="Standard bandits on " + reward_generator)
+    #algorithms = [EpsilonGreedy]
+    #algorithm_names = ["EpsilonGreedy"]
 
-# Task 2: 
-print("Adversarial bandits")
-for reward_generator in ["lower", "random"]:
-    all_cumulative_regrets = []
-    print("Reward generator: {}".format(reward_generator))
-    for i in range(len(algorithms)):
-        print("Algorithm: {}".format(algorithm_names[i]))
-        all_cumulative_regrets.append(run_adversarial_experiment(algorithms[i], K, Ts,
-        reward_generator=reward_generator))
-        #print("Cumulative regrets: {}".format(cumulative_regrets))
+    if True:
+        print("Standard bandits")
+        for reward_generator in ["lower", "random"]:
+            all_cumulative_regrets = []
+            print("Reward generator: {}".format(reward_generator))
+            for i in range(len(algorithms)):
+                print("Algorithm: {}".format(algorithm_names[i]))
+                all_cumulative_regrets.append(run_experiment(algorithms[i], K, Ts,
+                reward_generator=reward_generator))
+                #print("Cumulative regrets: {}".format(cumulative_regrets))
 
-    plot_many(np.log(Ts), all_cumulative_regrets, labels=algorithm_names,
-    figname="adversarial-all" + "-" + reward_generator,
-    xlabel="Log T", ylabel="Log cumulative regret",
-    title="Adversarial on " + reward_generator)
+            plot_many(np.log(Ts), np.log(all_cumulative_regrets), labels=algorithm_names,
+            figname="tstandard-all" + "-" + reward_generator,
+            xlabel="Log T", ylabel="Log cumulative regret",
+            title="Standard bandits on " + reward_generator)
+
+    # Task 2: 
+    if False:
+        print("Adversarial bandits")
+        for reward_generator in ["lower", "random"]:
+            all_cumulative_regrets = []
+            print("Reward generator: {}".format(reward_generator))
+            for i in range(len(algorithms)):
+                print("Algorithm: {}".format(algorithm_names[i]))
+                all_cumulative_regrets.append(run_adversarial_experiment(algorithms[i], K, Ts,
+                reward_generator=reward_generator))
+                #print("Cumulative regrets: {}".format(cumulative_regrets))
+
+            plot_many(np.log(Ts), np.log(all_cumulative_regrets), labels=algorithm_names,
+            figname="adversarial-all" + "-" + reward_generator,
+            xlabel="Log T", ylabel="Log cumulative regret",
+            title="Adversarial on " + reward_generator)
