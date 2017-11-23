@@ -187,6 +187,8 @@ class ThompsonSampling(BanditAlgorithm):
     def play(self, previous_reward, previous_action):
         # First update the arm history
         if not previous_action is None:
+            # Note that Thompson sampling requires the reward to be either 0 or 1.
+            previous_reward = int(previous_reward)
             self.arm_history[previous_action][previous_reward] += 1
 
         # Now sample a mean vector from the posterior distribution
