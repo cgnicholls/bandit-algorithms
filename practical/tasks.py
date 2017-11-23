@@ -181,7 +181,7 @@ if __name__ == "__main__":
                 #print("Cumulative regrets: {}".format(cumulative_regrets))
 
             plot_many(np.log(Ts), np.log(all_cumulative_regrets), labels=algorithm_names,
-            figname="tstandard-all" + "-" + reward_generator,
+            figname="standard-all" + "-" + reward_generator,
             xlabel="Log T", ylabel="Log cumulative regret",
             title="Standard bandits on " + reward_generator)
 

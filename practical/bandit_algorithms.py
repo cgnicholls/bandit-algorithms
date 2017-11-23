@@ -201,7 +201,7 @@ class ThompsonSampling(BanditAlgorithm):
 # situation. We implement this with cost notation, where cost = 1 - reward. The
 # interface is as for rewards though, since we make the adjustment inside 'play'.
 class Exp4(BanditAlgorithm):
-    def __init__(self, K, T, epsilon=0.3, gamma=0.3):
+    def __init__(self, K, T):
         self.K = K
         self.T = T
         self.t = 0
