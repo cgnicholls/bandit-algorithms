@@ -1,1 +1,1 @@
-Git repository for the AIMS ML course
+Git repository for multi-armed bandit algorithms.
