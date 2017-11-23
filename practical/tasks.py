@@ -123,7 +123,7 @@ def adversarial_bandit(bandit_algorithm, mean_rewards_1, mean_rewards_2,
         # Update the reward table (we could do this right at the start, since
         # it's an oblivious adversary).
         reward_table[:,t] = sample_many_bernoulli(mus[mu_index])
-        reward = rewards_table[action,t]
+        reward = reward_table[action,t]
         rewards.append(reward)
 
         # Transition
