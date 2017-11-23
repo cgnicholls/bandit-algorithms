@@ -157,7 +157,7 @@ def run_adversarial_experiment(bandit_class, K, Ts, transition_probability=0.1, 
 if __name__ == "__main__":
     K = 10
     base = 1.2
-    num_Ts = 10
+    num_Ts = 45
     Ts = [int(20 * base**i) for i in range(num_Ts)]
     print("Ts: {}".format(Ts))
 
