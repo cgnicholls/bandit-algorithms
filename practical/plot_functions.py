@@ -25,7 +25,7 @@ def plot_many(xs, ys_list, labels=None, xlabel="", ylabel="", title="", figname=
         plot = ax.plot(xs, ys, label=labels[i])
         handles.append(plot)
 
-    plt.legend()
+    plt.legend(loc='upper left')
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
