@@ -167,7 +167,8 @@ if __name__ == "__main__":
     print("Ts: {}".format(Ts))
 
     run_standard = True
-    run_adversarial = False
+    run_adversarial = True
+    reward_generators = ["lower"]
 
     algorithms = [SuccessiveElimination, UCB1, ThompsonSampling,
     UniformExploration, EpsilonGreedy, Exp4]
@@ -182,7 +183,7 @@ if __name__ == "__main__":
 
     if run_standard:
         print("Standard bandits")
-        for reward_generator in ["lower", "random"]:
+        for reward_generator in reward_generators:
             start_time = time()
             all_cumulative_regrets = []
             print("Reward generator: {}".format(reward_generator))
@@ -211,7 +212,7 @@ if __name__ == "__main__":
     # Task 2: 
     if run_adversarial:
         print("Adversarial bandits")
-        for reward_generator in ["lower", "random"]:
+        for reward_generator in reward_generators:
             start_time = time()
             all_cumulative_regrets = []
             print("Reward generator: {}".format(reward_generator))
