@@ -40,10 +40,15 @@ def sample_many_bernoulli(p):
 def sample_mean_rewards(K):
     return np.random.rand(K)
 
-# Lower bound mean rewards
-def lower_bound_mean_rewards(K, eps=1e-1):
+# Lower bound mean rewards. Set mean reward of all arms to 0.5, and set the mean
+# reward of one (randomly chosen) arm to 0.5 + epsilon.
+# We have to put epsilon = Theta(sqrt(K/T)), to get the required bound on
+# regret. But we cap epsilon so it is at most 0.5.
+def lower_bound_mean_rewards(K, T):
     a = np.random.choice(K)
     means = [0.5 for i in range(K)]
+    eps = np.sqrt(K/T)
+    eps = min(0.5, eps)
     means[a] += eps
     return means
 
@@ -86,7 +91,7 @@ def run_experiment(bandit_class, K, Ts, num_repeats=40, reward_generator="random
             if reward_generator == "random":
                 mean_rewards = sample_mean_rewards(K)
             else:
-                mean_rewards = lower_bound_mean_rewards(K)
+                mean_rewards = lower_bound_mean_rewards(K, T)
             rewards, actions = multi_armed_bandit(bandit_algorithm, mean_rewards, T)
             regrets.append(compute_regret(actions, mean_rewards))
         cumulative_regrets.append(np.mean(regrets))
@@ -144,8 +149,8 @@ def run_adversarial_experiment(bandit_class, K, Ts, transition_probability=0.1, 
                 mean_rewards_1 = sample_mean_rewards(K)
                 mean_rewards_2 = sample_mean_rewards(K)
             else:
-                mean_rewards_1 = lower_bound_mean_rewards(K)
-                mean_rewards_2 = lower_bound_mean_rewards(K)
+                mean_rewards_1 = lower_bound_mean_rewards(K, T)
+                mean_rewards_2 = lower_bound_mean_rewards(K, T)
             reward_table, rewards, actions = adversarial_bandit(bandit_algorithm,
             mean_rewards_1, mean_rewards_2, transition_probability, T)
 
