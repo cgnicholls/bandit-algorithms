@@ -6,6 +6,7 @@
 \usepackage{listings}
 \usepackage{todonotes}
 \usepackage{bbm}
+\usepackage[margin=1in]{geometry}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{remark}{Remark}
@@ -24,8 +25,9 @@ frame=single
 \newcommand{\bigoh}{\mathcal{O}}
 
 \DeclareMathOperator{\Beta}{Beta}
+\DeclareMathOperator{\Bernoulli}{Bernoulli}
 \DeclareMathOperator{\argmax}{argmax}
-\DeclareMathOperator{\adv}{adv}
+\DeclareMathOperator{\hind}{hind}
 \DeclareMathOperator{\UCB}{UCB}
 
 \title{AIMS Machine Learning Course 2017 \\ \emph{Solutions to Practical 3}}
@@ -34,9 +36,209 @@ frame=single
 
 \maketitle
 
-\section{Overview of algorithms}
-With each algorithm, we assume we know the number of trials $T$ and number of
-arms $K$ beforehand.
+\section{Multi-armed bandits}
+In this report we follow the lecture notes \cite{Kanade} and book draft
+\cite{Slivkins}.
+
+The multi-armed bandit problem consists of an agent repeatedly playing a game
+with $K$ actions, receiving reward after each action, and seeking to maximise
+this reward over all rounds. Explicitly, there are $K$ actions (often called
+\emph{arms}), and at each time step in the game, the agent selects an action
+$a_t \in \{1, \ldots, K\}$ and receives a reward $r_t(a_t)$ for having played
+this action. Crucially, the agent only gets feedback for the played arm, and
+does not get feedback for any other arms.
+
+In the following we assume that each game lasts a finite number of time steps
+$T$, and that the agent knows $T$. Then the total reward of the agent in a given
+episode is $\sum_{t=1}^T r_t(a_t)$.
+
+\subsection{Bandits with IID rewards}
+We first consider the multi-armed bandit problem in which each arm has a fixed
+reward distribution, and rewards from each arm are independent across time
+steps. The reward distributions between arms can differ. The agent has to
+balance exploring different arms, to learn about their distributions, and
+exploiting arms that they think provide greater reward.
+
+In the following we assume that the reward distribution of each arm $a$ is a
+Bernoulli distribution with mean $\mu(a)$. Thus at the beginning of each episode
+the means $\mu(1), \ldots, \mu(K)$ for each arm are chosen and fixed for the
+episode. At each time step, if the agent chooses action $i$, they receive reward
+$r_t(i) \sim \Bernoulli(\mu(i))$.
+
+Since reward varies a lot for different reward distributions, it makes more
+sense to compare the reward of the agent relative to some other metric. A useful
+metric to compare against is the performance of the agent that chooses the
+arm with highest mean every time -- of course, the mean reward of each arm isn't
+known to the agent so this strategy can't actually be played. Nonetheless, this
+difference is called the \emph{regret} of the episode, and is defined formally
+as follows. Let $a_1, \ldots, a_T$ be the sequence of actions the agent makes,
+and let $\mu(1), \ldots, \mu(K)$ be the (fixed) means of the Bernoulli
+distributions for each arm. Then the regret of the episode is
+\begin{align*}
+    R(T) = \max_a \mu(a) - \sum_{t=1}^T \mu(a_t),
+\end{align*}
+which is the difference between the expected reward for choosing the best arm
+every time and the expected reward for having taken the actions $a_1, \ldots,
+a_T$. We also call this the \emph{cumulative regret}, since it is summed over
+all time steps.
+
+What we are most interested in is the \emph{expected regret}, $\EE(R(T))$, which
+is well-defined for a fixed agent and fixed distribution over which we generate
+episodes.
+
+\begin{remark}
+    Note that the reward the agent actually received is $\sum_{t=1}^T r_t(a_t)$,
+    which differs from the second term in the definition of regret. In fact,
+    neither term in the regret can be computed unless the mean vector $\mu$ is
+    known. In practice, since we generate $\mu$ in our implementations, we can
+    compute this.  Even if the mean vector is not known, we can estimate it
+    using the rewards observed by the agent, and can thus estimate the regret.
+\end{remark}
+
+We model the reward distribution of each arm $a$ as a Bernoulli distribution
+with mean $\mu_a$. We considered two methods of selecting $\mu_a$.
+
+\paragraph{Randomly chosen means}
+Firstly, we consider sampling $\mu_a$ for each arm uniformly in the interval
+$[0,1]$, and then playing the entire episode with those means. We call this the
+\emph{randomly chosen means setup}.
+
+\paragraph{Lower bound construction}
+Secondly, we consider the lower bound construction as in the lectures. With $K$
+arms, we choose uniformly at random among the $K$ setups $I_i$, where
+\begin{align*}
+    \mu_j =
+    \begin{cases}
+        \frac{1}{2} + \epsilon, & \textrm{if} \hspace{0.2cm} j = i \\
+        \frac{1}{2}, & \textrm{if} \hspace{0.2cm} j \not= i.
+    \end{cases}
+\end{align*}
+We call this the \emph{lower bound setup}.
+
+Thus in the lower bound setup, we randomly choose one of the arms to have reward
+$1/2 + \epsilon$, and all other arms have reward $1/2$. It is shown in lectures
+that if we take $\epsilon = \Theta(\sqrt{K/T})$, then all bandit algorithms have
+expected cumulative regret $\Omega(\sqrt{K T})$ for this setup. In the below, I
+take the implied constant to equal 1, and set $\epsilon = \sqrt{K/T}$, although
+I always cap the mean $1/2 + \epsilon$ to be at most 1.
+
+\subsection{Adversarial bandits}
+
+We also consider the \emph{adversarial bandit} setting, where for each time step
+$t$ and each arm $a$, an adversary chooses the rewards $r_t(a)$. The agent then
+chooses an action $a_t$ and receives reward $r_t(a_t)$. Note that the adversary
+chooses rewards before the agent chooses their action, which makes the problem
+nontrivial.
+
+We actually restrict to the case of an oblivious randomised adversarial bandit.
+That the adversary is oblivious means that their choice of rewards do not depend
+on the agent's previous actions. The adversary may as well choose all the
+rewards before the agent even starts playing, thus populating a \emph{reward
+table} $r_t(a)$ with an entry for each $t = 1, \ldots, T$ and arm $a \in \{1,
+\ldots, K\}$. We assume the adversary is randomised, meaning that the adversary
+fixes a distribution over the reward table before each episode, and then
+generates rewards according to this distribution. Thus iid rewards for each arm is
+one example of this.
+
+In the adversarial setting, we use the \emph{hindsight regret}. Given the reward
+table, the reward in hindsight is then
+\begin{align*}
+    R_{\hind}(T) = \max_a \sum_{t=1}^T r_t(a) - \sum_{t=1}^T r_t(a_t),
+\end{align*}
+where $a_1, \ldots, a_T$ is the sequence of actions the algorithm makes, and
+$r_t(a_t)$ is the sequence of rewards the algorithm receives. Thus the hindsight
+regret is the difference between the reward of the best arm in hindsight minus
+the reward the algorithm actually received.
+
+\begin{remark}
+    We could again use the definition of regret from the iid reward scenario, but
+    this would require computing explicitly the mean reward for each arm. In
+    many scenarios, computing this mean analytically would be tricky. Replacing
+    each term in $R_{\hind}(T)$ by its expected value under the adversary's
+    reward distribution yields the \emph{foresight regret}.
+\end{remark}
+
+For the adversarial bandit setting, I investigated the following scenario,
+suggested in the problem description. I sampled two separate mean vectors
+$\mu^1, \mu^2$ in $[0,1]^K$. Again I split into two cases: using either the
+uniform distribution or lower bound construction. At each time step the rewards
+are generated by a Bernoulli distribution with mean vector either $\mu^1$ or
+$\mu^2$, chosen as follows. We first fix a transition probability $p$. At time
+$t = 1$, we set $\mu = \mu^1$. At each subsequent time step, with probability
+$p$, the mean vector $\mu$ is selected as the other mean vector.
+
+\section{Algorithms}
+We have provided four scenarios to test multi-armed bandit algorithms against.
+The scenario is either the standard bandit problem (iid rewards), or the
+adversarial bandit problem. In each scenario, we use rewards generated from a
+Bernoulli distribution for each arm, and we either generate the mean vectors
+$\mu$ uniformly at random in $[0,1]^K$ or using the lower bound construction.
+
+We now describe the algorithms we implemented and tested against these four
+scenarios. For each algorithm, we assume we know the number of trials $T$ and
+number of arms $K$ beforehand.
+
+\subsection{Uniform exploration}
+With uniform exploration, we first sample each arm a fixed number of times, then
+compute the sample mean for each arm, and for all remaining time steps follow
+the arm with highest mean.
+
+We showed in lectures that if we explore for $N$ steps in total, where $N =
+\bigoh((T/K)^{2/3} (\log T)^{1/3} )$, then uniform exploration has a regret
+bound of $\EE(R(T)) \le \bigoh(T^{2/3} (K \log T)^{1/3})$.
+
+\begin{remark}
+    Note that we explore for $N$ steps in total, so we sample each arm $N / K$
+    times in the exploration phase. Technically, I used $N = 10 (T /
+    K)^{\frac{2}{3}} (\log T)^{\frac{1}{3}}$. The factor of 10 is to ensure that
+    the algorithm always explores all arms. One could replace this with $\max(K,
+    (T / K)^{\frac{2}{3}} (\log T)^{\frac{1}{3}})$, which also ensures full
+    exploration. Taking a smaller factor for $N$ may well improve performance.
+\end{remark}
+
+\subsection{Epsilon-greedy}
+
+The epsilon-greedy algorithm keeps track of the sample mean of each arm. It has
+a parameter $\epsilon$, which can depend on the time-step $t$. With probability
+$\epsilon$ it chooses a random arm, and otherwise it picks the arm with largest
+sample mean.
+
+\begin{remark}
+    A note on implementation: we assume that each arm has mean 1 until it is
+    played, to encourage each arm to be played at least once first. Previously I
+    tried assuming the mean was zero, but if $\epsilon$ is small and $K$ is
+    large, then this can cause a long delay in trying all the arms and so regret
+    can be high to start with.
+\end{remark}
+
+With $\epsilon_t = t^{-1/3} (K \log t)^{1/3}$, epsilon-greedy achieves regret
+bound $\EE(R(T)) \le \bigoh( T^{2/3} (K \log T)^{1/3} )$.
+
+\subsection{Successive elimination}
+We keep sample means for each arm, and also maintain the confidence intervals
+$\gamma_t(a) = \sqrt{\frac{2 \log T}{n_t(a)}}$, where $n_t(a)$ is the number of
+times $a$ has been played.
+
+We now play in phases. At the start of the first phase, mark all arms as
+eligible. In each phase, we play each eligible arm once that has not yet been
+played this sequence. At the end of the phase, we update the eligible arms. An
+arm is eligible if and only if its upper confidence limit, $\mu_t(a) +
+\gamma_t(a)$ is at least the lower confidence limit of all other arms $a'$, i.e.
+\begin{align*}
+    \mu_t(a) + \gamma_t(a) \ge \max_{a'} (\mu_t(a') - \gamma_t(a')).
+\end{align*}
+We can simply compute the maximum lower confidence limit, and check the upper
+confidence limit of all arms against that.
+
+This algorithm has no parameters, and achieves regret bound $\EE(R(T)) =
+\bigoh(\sqrt{K T \log T})$.
+
+\subsection{UCB1}
+UCB stands for upper confidence bound. The algorithm \verb'UCB1' maintains
+sample means for each arm, and computes the upper confidence limit $\UCB_t(a) =
+\mu_t(a) + \gamma_t(a)$ at time $t$. It picks the arm with largest $\UCB_t(a)$.
+
+UCB1 achieves regret bound $\EE(R(T)) = \bigoh(\sqrt{K T \log T})$.
 
 \subsection{Thompson sampling}
 Thompson sampling works as follows. We first assume a prior distribution on the
@@ -55,7 +257,7 @@ Let $H_t = (a_1, r_1, \ldots, a_{t-1}, r_{t-1})$ be the history of all actions
 taken and rewards observed by the algorithm up until time $t$. Thompson sampling
 chooses an action $a$ by sampling $a$ from the distribution $p_t(a) = \PP(a =
 a^* \mid H_t)$; this is the probability that $a$ is the best arm, given the
-action and rewards seen by the algorithm so far. Since we make the
+actions and rewards seen by the algorithm so far. Since we make the
 single-parameter family assumption, we can equivalently sample a mean
 $\tilde{\mu}_a$ for each arm from the posterior, and then choose the arm with
 highest sample mean: $\tilde{a} = \argmax_a \tilde{\mu}_a$. This is because
@@ -76,68 +278,29 @@ I used the prior $\Beta(1,1)$, and then updated each arm when I received a rewar
 for it. After $\alpha$ observations of 1s and $n - \alpha$ observations of 0s
 from arm $a$, the posterior is $\Beta(\alpha + 1, n - \alpha + 1)$.
 
-Thompson sampling achieves regret bound $R(T) = \bigoh(KT \log T)$
-(\cite{Slivkins}, Theorem 4.12).
-
-\subsection{Uniform exploration}
-With uniform exploration, we first sample each arm a fixed number of times, then
-compute the sample mean for each arm, and for all remaining time steps follow
-the arm with highest mean.
-
-We showed in lectures that if we explore for $N$ steps in total, where $N =
-\bigoh((T/K)^{2/3} (\log T)^{1/3} )$ gives a regret bound of $\EE(R(T)) \le
-\bigoh(T^{2/3} (K \log T)^{1/3})$.
-
-\begin{remark}
-    Note that we explore for $N$ steps in total, so we sample each arm $N / K$
-    times in the exploration phase.
-\end{remark}
-
-\subsection{Epsilon-greedy}
-
-The epsilon-greedy algorithm keeps track of the sample mean of each arm. It has
-a parameter $\epsilon$, which can depend on the time-step $t$. With probability
-$\epsilon$ it chooses a random arm, and otherwise it picks the arm with largest
-sample mean.
-
-Implementation comment: we assume that each arm has mean 1 until it is played,
-to encourage each arm to be played at least once first. Previously I tried
-assuming the mean was zero, but if $\epsilon$ is small and $K$ is large, then
-this can cause a long delay in trying all the arms and so regret can be high to
-start with.
-
-With $\epsilon_t = t^{-1/3} (K \log t)^{1/3}$, epsilon-greedy achieves regret
-bound $\EE(R(T)) \le \bigoh( t^{2/3} (K \log t)^{1/3} )$.
-
-\subsection{Successive elimination}
-We keep sample means for each arm, and also maintain the confidence intervals
-$\gamma_t(a) = \sqrt{\frac{2 \log T}{n_t(a)}}$, where $n_t(a)$ is the number of
-times $a$ has been played.
-
-We now play in phases. At the start of the first phase, mark all arms as
-eligible. In each phase, we play each eligible arm once that has not yet been
-played this sequence. At the end of the phase, we update the eligible arms. An
-arm is eligible if and only if its upper confidence limit, $\mu_t(a) +
-\gamma_t(a)$ is at least the lower confidence limit of all other arms $a'$, i.e.
-\begin{align*}
-    \mu_t(a) + \gamma_t(a) \ge \max_{a'} (\mu_t(a') - \gamma_t(a')).
-\end{align*}
-We can simply compute the maximum lower confidence limit, and check the upper
-confidence limit of all arms against that.
-
-This algorithm has no parameters, and achieves regret bound $\EE(R(t)) =
-\bigoh(\sqrt{K t \log T})$ for all rounds $t \le T$.
-
-\subsection{UCB1}
-UCB stands for upper confidence bound. The algorithm \verb'UCB1' maintains
-sample means for each arm, and computes the upper confidence limit $\UCB_t(a) =
-\mu_t(a) + \gamma_t(a)$ at time $t$. It picks the arm with largest $\UCB_t(a)$.
-
-UCB1 achieves regret bound $\EE(R(T)) = \bigoh(\sqrt{K T \log T})$.
+Thompson sampling achieves regret bound $R(T) = \bigoh(\sqrt{KT \log T})$ in the
+iid rewards scenario (\cite{Slivkins}, Theorem 4.12).
 
 \subsection{Exp4}
 
+As explained in \cite{Slivkins} and in lectures, we can solve the adversarial
+bandit problem using the idea of \emph{experts}. We define the problem of
+adversarial bandits with expert advice as follows. Suppose there are $N$ experts
+$e \in \mathcal{E}$, who, at each time step $t$, recommend an arm $a_{t,e}$. The
+agent sees all recommendations, chooses an arm $a_t$ to play, and then incurs
+cost $c_t(a_t)$. The goal is now to minimise cost with respect to the best
+\emph{expert}.
+
+We relate this to the adversarial bandit problem with $K$ arms by defining $K$
+experts, where expert $i$ always recommends playing arm $i$.
+
 We use the adversarial bandit algorithm called \verb'Exp4' from \cite{Slivkins}.
+The adversarial algorithms are usually phrased in terms of cost rather than
+reward. We make the adjustment $c = 1 - r$ where $c$ denotes the cost and $r$
+denotes the reward. This takes a reward in the range $[0,1]$ to a cost in the
+range $[0,1]$ where, instead of maximising the reward, we want to minimise the
+cost. Thus to use the adversarial algorithm \verb'Exp4' we make the
+transformation to costs and then use the algorithm as described for costs.
 
 \begin{lstlisting}
 Given a set E of experts, and parameters eps, gamma in (0,1/2)
@@ -163,144 +326,65 @@ For each round t:
 \sqrt{\log K / (3 U)}$ where $U = K / (1-\gamma)$, the regret is bounded by $\EE
 (R(T)) \le 2 \sqrt{3} \sqrt{T K \log K} + 1$.
 
-\section{Task 1}
-
-We model the reward distribution of each arm $a$ as a Bernoulli distribution
-with mean $\mu_a$. We considered two methods of selecting $\mu_a$. Firstly, we
-consider sampling $\mu_a$ for each arm uniformly in $[0,1]$. We call this the
-\emph{randomly chosen means setup}. Secondly, we consider the lower bound
-construction as in the lectures. With $K$ arms, we choose uniformly at random
-among the $K$ setups $I_i$, where
-\begin{align*}
-    \mu_j =
-    \begin{cases}
-        \frac{1}{2} + \epsilon, & \textrm{if} \hspace{0.2cm} j = i \\
-        \frac{1}{2}, & \textrm{if} \hspace{0.2cm} j \not= i.
-    \end{cases}
-\end{align*}
-We call this the \emph{lower bound setup}.
-
-Thus in the lower bound setup, we randomly choose one of the arms to have reward
-$1/2 + \epsilon$, and all other arms have reward $1/2$. It is shown in lectures
-that if we take $\epsilon = \Theta(\sqrt{K/T})$, then all bandit algorithms have
-expected cumulative regret $\Omega(\sqrt{K T})$ for this setup. In the below, I
-take the implied constant to equal 1, and set $\epsilon = \sqrt{K/T}$, although
-I always cap the mean $1/2 + \epsilon$ to be at most 1.
-
+\section{Results}
 I implemented uniform exploration, epsilon-greedy, successive elimination, UCB1,
 Thompson sampling, and Exp4 (the generalisation of Hedge), and tried each
-algorithm out on both bandit setups. I also implemented a random bandit
-algorithm, that just chooses randomly at each stage. The following are the
-results. As suggested in Task 1, I fixed $K = 10$ arms and focused on the
-dependence on $T$. Each is a plot of $\log R(T)$ against $\log T$, where $R(T)$
-denotes the expected cumulative regret. To approximate $R(T)$, I ran each
-experiment 40 times and averaged the results.
+algorithm out on all four bandit setups. I also implemented a random bandit
+algorithm, that just chooses randomly at each stage. As suggested, I fixed $K =
+10$ arms and focused on the dependence on $T$.
 
-Thus $\log \EE( R(T) ) \le \frac{2}{3} \log T + \bigoh(\log (K \log T))$ for
-uniform exploration and epsilon-greedy. For successive elimination and UCB1, the
-slope of $\log \EE( R(T))$ against $\log T$ is bounded by $\frac{1}{2}$. We
-analyse this in the following graphs.
+Note that some of the algorithms require parameters, and that I didn't spend
+long tuning them. For example, the parameter $N$ in the uniform exploration
+algorithm is only upper bounded up to a constant.
 
-We expect that for the uniformly random chosen means, the slopes are at most
-$2/3, 2/3, 1/2, 1/2$, respectively. For the lower bound means, we are expecting
-that the slopes should all be at least $1/2$. In Figure~\ref{figure-graphs}, the
-top two graphs show the results for the lower bound means (top left) and for the
-randomly chosen means (top right).
+The upper bounds on expected regret for all the algorithms are of the form
+$\EE(R(T)) \le \bigoh(T^\alpha \log T \sqrt{K})$ for some $\alpha$, where $R(T)$
+denotes the cumulative regret. The upper bounds can have slightly better
+dependence on $\log T$ and $K$, but we focus on the $T^\alpha$ terms here. To
+determine $\alpha$ experimentally, we plot $\log R(T)$ against $\log T$, where
+$T$. To approximate $R(T)$, I ran each experiment 40 times and averaged the
+results. Due to computational constraints, I chose $T = 20 \cdot 1.2^i$ for $i =
+1, \ldots, 45$. For the adversarial scenario I chose $p = 0.1$ as the transition
+probability. The results are displayed in Figure~\ref{figure-graphs}.
 
-Interestingly, for the lower bound construction, the gradient of all the lines
-are very similar, roughly equal to 1. Each bandit algorithm we implemented has a
-regret bound of at most $T^{2/3}$, and some of them have $T^{1/2}$, so this is
-surprising. However, we can't actually conclude much from such a diagram, as
-this regret bound is only guaranteed asymptotically.
+The top two graphs in Figure~\ref{figure-graphs} show the results for the iid
+reward scenario. The top left graph is for the lower bound means, and the top
+right is for the randomly chosen means. The bottom two graphs show the results
+for the adversarial setting; again, the bottom left graph is for the lower bound
+means, and the bottom right graph is for the randomly chosen means.
 
-%\begin{figure}[!ht]
-%    \center
-%    \begin{tabular}{cc}
-%        \includegraphics[width=7cm]{"plots/uniform-random"} &
-%        \includegraphics[width=7cm]{"plots/epsilongreedy-random"} \\
-%        \includegraphics[width=7cm]{"plots/successiveelimination-random"} &
-%        \includegraphics[width=7cm]{"plots/ucb1-random"} \\
-%        \includegraphics[width=7cm]{"plots/thompson-random"} & 
-%    \end{tabular}
-%    \caption{Uniformly random chosen means}
-%    \label{figure-random}
-%\end{figure}
-%
-%\begin{figure}[!ht]
-%    \center
-%    \begin{tabular}{cc}
-%        \includegraphics[width=7cm]{"plots/uniform-lower"} &
-%        \includegraphics[width=7cm]{"plots/epsilongreedy-lower"} \\
-%        \includegraphics[width=7cm]{"plots/successiveelimination-lower"} &
-%        \includegraphics[width=7cm]{"plots/ucb1-lower"} \\
-%        \includegraphics[width=7cm]{"plots/thompson-lower"} & 
-%    \end{tabular}
-%    \caption{Means from lower bound construction}
-%    \label{figure-lower}
-%\end{figure}
+We expect that for the iid rewards bandit scenario, the slopes are upper bounded
+by $2/3$ for uniform exploration and epsilon-greedy, and by $1/2$ for successive
+elimination, \verb'UCB1', Thompson sampling, and \verb'Exp4'. This does seem to
+hold experimentally for most of the algorithms (top two graphs in
+Figure~\ref{figure-graphs}). In particular, for the iid rewards with random
+means (top right graph), we make the following observations. The random bandit
+algorithm seems to have slope roughly 1, while the uniform exploration, and
+epsilon-greedy algorithms have slightly shallower slope, which would presumably
+eventually be upper bounded by $2/3$, as $T$ increases. The slopes of the
+remaining algorithms become shallower as $T$ increases, again presumably
+eventually being upper bounded by $1/2$.
 
-\section{Task 2}
+We now discuss the lower bound construction (left two graphs). As explained in
+lectures and in \cite{Slivkins}, we can also get upper bounds on expected regret
+if $\Delta(a) \coloneqq \mu(a^*) - \mu(a)$ is bounded. Indeed, cumulative regret
+is bounded by $\bigoh(T \cdot \max_a \Delta(a))$. Our choice of $\epsilon =
+\sqrt{K/T}$ in the lower bound construction ensures that all algorithms get a
+regret bound of $\bigoh(\epsilon T) = \bigoh(\sqrt{KT})$. Thus we expect that
+all algorithms should get a slope of at most $1/2$ in the graphs (in both the
+adversarial and non-adversarial settings). Separately, we know in the iid
+setting, that the lower bound construction gives a lower bound on the slope of
+$1/2$. Thus we expect that the lines should all have slope $1/2$ in the top left
+graph. This also seems to hold in the adversarial setting, though the lower
+bound construction doesn't immediately imply this theoretically.
 
-\subsection{Adversarial bandits}
-
-For the adversarial bandit setting, I investigated the following scenario,
-suggested in the problem description. I sampled two separate mean vectors
-$\mu^1, \mu^2$ uniformly in $[0,1]^K$. I also chose a transition probability $p$
-and then give the arms the Bernoulii distribution with mean vector $\mu$, where
-$\mu$ is chosen as follows.  Initially, $\mu = \mu^1$. On each round, with
-probability $p$ the mean vector $\mu$ is selected as the other mean vector.
-
-
-
-Note that we define the reward in hindsight as the sum of the mean rewards of
-all the arms (since we privately know all the means).
-
-
-
-Let $R(T)$ denote the cumulative regret of an algorithm, run up to time $T$. We
-plot $\log R(T)$ against $\log T$ for all the algorithms.
-
-
-\begin{remark}
-    It seems to affect the variance of our sample of $\EE(R(T))$ a lot whether
-    you use $R(T) = T \max_a \mu(a) - \sum_{t=1}^T r_t(a_t)$ or, the correct
-    definition, $R(T) = T \max_a \mu(a) - \sum_{t=1}^T \mu(a_t)$. In the first,
-    you use the actual reward received by the algorithm, and in the second, we
-    use the mean reward!
-\end{remark}
-
-
-
-We have two types of regret. In the standard setting (i.e. non adversarial), we
-use the regret
-\begin{align*}
-    R(T) = \max_a \mu(a) - \sum_{t=1}^T \mu(a_t),
-\end{align*}
-where $a_1, \ldots, a_T$ is the sequence of actions the algorithm makes, and
-$\mu_1, \ldots, \mu_K$ is the mean reward vector. Note that the second term
-differs from $\sum_{t=1}^T r_t(a_t)$, which is the reward the algorithm
-actually receives. In fact, the algorithm cannot compute $R(T)$ without knowing
-the mean vector $\mu$. However, in our `standard' scenario, we can compute this,
-since we generate $\mu$ in the program.
-
-In the adversarial setting, we use the hindsight regret. We assume an oblivious
-adversary, and so can assume that the rewards $r_t(a)$ are generated beforehand
-for all $t = 1, \ldots, T$ and arms $a$. We call this the \emph{reward table}.
-The reward in hindsight is then
-\begin{align*}
-    R_{\adv}(T) = \max_a \sum_{t=1}^T r_t(a) - \sum_{t=1}^T r_t(a_t),
-\end{align*}
-where $a_1, \ldots, a_T$ is the sequence of actions the algorithm makes, and
-$r_t(a_t)$ is the sequence of rewards the algorithm receives. Thus the hindsight
-regret is the difference between the reward of the best arm in hindsight minus
-the reward the algorithm actually received.
-
-The adversarial algorithms are usually phrased in terms of cost rather than
-reward. We make the adjustment $c = 1 - r$ where $c$ denotes the cost and $r$
-denotes the reward. This takes a reward in the range $[0,1]$ to a cost in the
-range $[0,1]$ where, instead of maximising the reward, we want to minimise the
-cost. Thus to use the adversarial algorithm \verb'Exp4' we make the
-transformation to costs and then use the algorithm as described for costs.
+For the adversarial means, we only have an upper bound on expected regret for
+\verb'Exp4'. It's interesting that some of the other algorithms, not designed
+for the adversarial scenario, performed comparably to \verb'Exp4'. Notably,
+Thompson sampling performed best in both the random reward and adversarial
+random reward scenarios. \verb'UCB1' and \verb'Exp4' performed comparably in the
+random non-adversarial setting, and \verb'UCB1' outperformed \verb'Exp4' in the
+random adversarial setting.
 
 \begin{figure}[!ht]
     \center
@@ -317,44 +401,18 @@ transformation to costs and then use the algorithm as described for costs.
     \label{figure-graphs}
 \end{figure}
 
-Thoughts about graphs
-\begin{itemize}
-    \item The lower bound construction does force the slopes of all the
-    lines to be at most $1/2$. Moreover, all algorithms seem to achieve this
-    slope. This is interesting, as it's supposed to be a lower bound. But in
-    fact, any algorithm that satisfies \cite{Slivkins} equation 2.7 does achieve
-    slope 1/2. There's a distinction between the upper bounds: either try and
-    bound regret without assuming anything about $\Delta(a) \coloneqq \mu(a^*) -
-    \mu(a)$, or you can bound the regret in terms of $\Delta(a)$.
-    \item By our choice of $\epsilon = \sqrt{K/T}$, and since all arms
-    contribute at most $\epsilon$ to regret each round, we have a trivial bound
-    on regret given by $\epsilon T$ (whatever the algorithm). Thus all
-    algorithms achieve a regret bound of $\bigoh(\epsilon T) = \bigoh(\sqrt{K
-    T})$. That this is also a lower bound follows from the construction of the
-    lower bound.
+\section{Conclusion}
+In this report we compared seven multi-armed bandit algorithms on four
+scenarios. We confirmed experimentally, in a specific scenario, the lower bound
+construction from \cite{Slivkins} that posits that no algorithm can achieve
+better than $\Omega(\sqrt{KT})$ across all multi-armed bandit problem instances.
 
-    \item Some of the parameters could be tuned a bit better. For example,
-    the parameter $N$ in the uniform exploration algorithm is only upper bounded
-    up to a constant. Running the experiment ad hoc, I found uniform exploration
-    did a little better with a smaller constant factor. However, in the above
-    plots, I used $N = 10 (T / K)^{\frac{2}{3}} (\log T)^{\frac{1}{3}}$. The
-    factor of 10 is to ensure that the algorithm always explores all arms. One
-    could replace this with $\max(K, (T / K)^{\frac{2}{3}} (\log
-    T)^{\frac{1}{3}})$, which also ensures full exploration.
-\end{itemize}
-
-\begin{figure}[!ht]
-    \center
-    \begin{tabular}{cc}
-        \includegraphics[width=7cm]{"plots/standard-random-vs-successiveelimination"} &
-        \includegraphics[width=7cm]{"plots/adversarial-random-vs-successiveelimination"}
-    \end{tabular}
-    \caption{Log cumulative regret vs $\log T$ for a random bandit versus for
-    the successive elimination algorithm. Top: in the standard bandit scenario;
-    bottom: in the adversarial bandit scenario.}
-    \label{figure-graphs}
-\end{figure}
-
+We also investigated experimentally the performance on adversarial bandit
+problems of algorithms which only have regret guarantees in the iid reward
+scenario. It is difficult to comprehensively test performance in the adversarial
+scenario, but in the scenario we tested, we found that Thompson sampling seems
+to adapt well to the adversarial scenario. The \verb'UCB1' algorithm also
+performed well.
 
 \bibliographystyle{alpha}
 \bibliography{aims-ml-practicalwriteup}
