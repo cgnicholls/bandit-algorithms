@@ -47,7 +47,7 @@ def sample_mean_rewards(K):
 def lower_bound_mean_rewards(K, T):
     a = np.random.choice(K)
     means = [0.5 for i in range(K)]
-    eps = np.sqrt(K/T)
+    eps = np.sqrt(float(K)/float(T))
     eps = min(0.5, eps)
     means[a] += eps
     return means
