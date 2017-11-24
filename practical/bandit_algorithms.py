@@ -45,8 +45,8 @@ class UniformExploration(BanditAlgorithm):
 
     def get_exploration_steps(self, T):
         # At least explore for K steps, but also at least explore for
-        # (T/K)^(2/3) * log T steps.
-        return max(self.K, self.K * int((T / self.K)**0.667 * np.log(T)))
+        # (T/K)^(2/3) * (log T)^(1/3) steps.
+        return max(self.K, int((T / self.K)**0.667 * np.log(T)**0.333))
 
 class EpsilonGreedy(BanditAlgorithm):
     def __init__(self, K, T):

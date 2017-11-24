@@ -403,7 +403,11 @@ random adversarial setting.
 
 \section{Conclusion}
 In this report we compared seven multi-armed bandit algorithms on four
-scenarios. We confirmed experimentally, in a specific scenario, the lower bound
+scenarios. The consistently worst performing experimentally were the random
+bandit algorithm (unsurprisingly), and uniform exploration. The best performing
+seems to be Thompson sampling.
+
+We confirmed experimentally, in a specific scenario, the lower bound
 construction from \cite{Slivkins} that posits that no algorithm can achieve
 better than $\Omega(\sqrt{KT})$ expected regret across all multi-armed bandit
 problem instances.
