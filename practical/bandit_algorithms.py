@@ -19,7 +19,7 @@ class BanditAlgorithm:
 class UniformExploration(BanditAlgorithm):
     def __init__(self, K, T):
         self.K = K
-        self.set_exploration_steps(T)
+        self.exploration_steps = self.get_exploration_steps(T)
         self.t = 0
         self.rewards = {i: [] for i in range(self.K)}
         self.mean_rewards = None
@@ -43,8 +43,10 @@ class UniformExploration(BanditAlgorithm):
         self.t += 1
         return action
 
-    def set_exploration_steps(self, T):
-        self.exploration_steps = int((T / self.K)**0.667 * np.log(T))
+    def get_exploration_steps(self, T):
+        # At least explore for K steps, but also at least explore for
+        # (T/K)^(2/3) * log T steps.
+        return max(self.K, self.K * int((T / self.K)**0.667 * np.log(T)))
 
 class EpsilonGreedy(BanditAlgorithm):
     def __init__(self, K, T):
@@ -52,7 +54,7 @@ class EpsilonGreedy(BanditAlgorithm):
         self.t = 0
         self.epsilon = self.compute_epsilon(0)
         self.rewards = {i: [] for i in range(self.K)}
-        self.mean_rewards = {i: 0.0 for i in range(self.K)}
+        self.mean_rewards = {i: 1.0 for i in range(self.K)}
 
     # Computes epsilon as t^(-1/3) * (K * log t)^(1/3).
     def compute_epsilon(self, t):
@@ -248,3 +250,11 @@ class Exp4(BanditAlgorithm):
             return np.random.choice(self.K)
         else:
             return self.picked_expert
+
+# This class plays randomly.
+class RandomBandit(BanditAlgorithm):
+    def __init__(self, K, T):
+        self.K = K
+
+    def play(self, previous_reward, previous_action):
+        return np.random.choice(self.K)

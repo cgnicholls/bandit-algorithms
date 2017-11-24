@@ -23,7 +23,7 @@
 
 import pickle
 import numpy as np
-from bandit_algorithms import UniformExploration, EpsilonGreedy, UCB1, SuccessiveElimination, ThompsonSampling, Exp4
+from bandit_algorithms import UniformExploration, EpsilonGreedy, UCB1, SuccessiveElimination, ThompsonSampling, Exp4, RandomBandit
 from plot_functions import plot, plot_many, plot_from_pickle
 from time import time
 
@@ -168,15 +168,15 @@ if __name__ == "__main__":
 
     run_standard = True
     run_adversarial = True
-    reward_generators = ["lower"]
+    reward_generators = ["lower", "random"]
 
-    algorithms = [SuccessiveElimination, UCB1, ThompsonSampling,
+    algorithms = [RandomBandit, SuccessiveElimination, UCB1, ThompsonSampling,
     UniformExploration, EpsilonGreedy, Exp4]
-    algorithm_names = ["SuccessiveElimination", "UCB1", "ThompsonSampling",
+    algorithm_names = ["RandomBandit", "SuccessiveElimination", "UCB1", "ThompsonSampling",
     "UniformExploration", "EpsilonGreedy", "Exp4"]
 
-    #algorithms = [Exp4]
-    #algorithm_names = ["Exp4"]
+    #algorithms = [RandomBandit, EpsilonGreedy, SuccessiveElimination]
+    #algorithm_names = ["RandomBandit", "EpsilonGreedy", "SuccessiveElimination"]
 
     #algorithms = [EpsilonGreedy]
     #algorithm_names = ["EpsilonGreedy"]
@@ -194,7 +194,7 @@ if __name__ == "__main__":
                 #print("Cumulative regrets: {}".format(cumulative_regrets))
 
             # Save to file.
-            figname = "standard-all" + "-" + reward_generator + "-numTs-" + str(num_Ts)
+            figname = "plots/standard-all" + "-" + reward_generator + "-numTs-" + str(num_Ts)
             pickle_name = figname + ".pickle"
             pickle_out = open(pickle_name,"wb")
             result_dict = {"xs": np.log(Ts),
@@ -223,7 +223,7 @@ if __name__ == "__main__":
                 #print("Cumulative regrets: {}".format(cumulative_regrets))
 
             # Save to file.
-            figname = "adversarial-all" + "-" + reward_generator + "-numTs-" + str(num_Ts)
+            figname = "plots/adversarial-all" + "-" + reward_generator + "-numTs-" + str(num_Ts)
             pickle_name = figname + ".pickle"
             pickle_out = open(pickle_name,"wb")
             result_dict = {"xs": np.log(Ts),
